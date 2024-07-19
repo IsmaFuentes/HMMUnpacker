@@ -10,46 +10,88 @@ namespace HMMUnpacker
     }
 
     private string? SelectedFile { get; set; }
+    private void btnOpenFile_Click(object sender, EventArgs e)
+    {
+      using (var dialog = new OpenFileDialog())
+      {
+        dialog.Filter = "pak files (*.pak)|*.pak";
+        dialog.RestoreDirectory = true;
+
+        if (dialog.ShowDialog() == DialogResult.OK)
+        {
+          SelectedFile = dialog.FileName;
+          txtSelectedFile.Text = SelectedFile;
+        }
+      }
+    }
 
     private void bntUnpack_Click(object sender, EventArgs e)
     {
-      if(!string.IsNullOrEmpty(SelectedFile))
+      if (!string.IsNullOrEmpty(SelectedFile))
       {
-        // Ask for output directory
-        using (var dialog = new FolderBrowserDialog())
+        using (var dialog = new FolderBrowserDialog()) // File output directory
         {
-          if(dialog.ShowDialog() == DialogResult.OK)
+          if (dialog.ShowDialog() == DialogResult.OK)
           {
             Task.Run(() =>
             {
               var processor = new ArchiveProcessor();
 
-              processor.Unpack(SelectedFile, dialog.SelectedPath, (e) =>
+              try
               {
-                consoleBox.Invoke(() =>
+                processor.Unpack(SelectedFile, dialog.SelectedPath, (message, isError) =>
                 {
-                  consoleBox.Text += $"{e}\n";
-                  consoleBox.SelectionStart = consoleBox.Text.Length;
-                  consoleBox.ScrollToCaret();
+                  consoleBox.Invoke(() =>
+                  {
+                    consoleBox.ForeColor = isError ? Color.Red : Color.LimeGreen;
+                    consoleBox.Text += $"{message}\n";
+                    consoleBox.SelectionStart = consoleBox.Text.Length;
+                    consoleBox.ScrollToCaret();
+                  });
                 });
-              });
+              }
+              catch(Exception ex)
+              {
+                Invoke(() => MessageBox.Show(ex.Message, "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error));
+              }
             });
           }
         }
       }
     }
 
-    private void btnOpenFile_Click(object sender, EventArgs e)
+    private void bntRepack_Click(object sender, EventArgs e)
     {
-      using(var dialog = new OpenFileDialog())
+      using (var dialog = new FolderBrowserDialog()) // Archive output directory
       {
-        dialog.Filter = "pak files (*.pak)|*.pak";
-        dialog.RestoreDirectory = true;
-
-        if(dialog.ShowDialog() == DialogResult.OK)
+        if (dialog.ShowDialog() == DialogResult.OK)
         {
-          SelectedFile = dialog.FileName;
-          txtSelectedFile.Text = SelectedFile;
+          int x = DesktopLocation.X + (Width  / 4);
+          int y = DesktopLocation.Y + (Height / 4);
+          string pakName = Microsoft.VisualBasic.Interaction.InputBox("Please, specify a PAK name", "HMMUnpacker", "data", x, y);
+
+          Task.Run(() =>
+          {
+            var processor = new ArchiveProcessor();
+
+            try
+            {
+              processor.Repack(dialog.SelectedPath, Path.Combine(dialog.SelectedPath, $"{pakName}.pak"), (message, isError) =>
+              {
+                consoleBox.Invoke(() =>
+                {
+                  consoleBox.ForeColor = isError ? Color.Red : Color.LimeGreen;
+                  consoleBox.Text += $"{message}\n";
+                  consoleBox.SelectionStart = consoleBox.Text.Length;
+                  consoleBox.ScrollToCaret();
+                });
+              });
+            }
+            catch(Exception ex)
+            {
+              Invoke(() => MessageBox.Show(ex.Message, "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error));
+            }
+          });
         }
       }
     }

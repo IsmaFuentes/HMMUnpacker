@@ -52,7 +52,7 @@ namespace HMMUnpacker.HMM
     /// <param name="outputPath"></param>
     /// <param name="writeToConsole"></param>
     /// <exception cref="Exception"></exception>
-    public void Unpack(string filePath, string outputPath, Action<string> writeToConsole)
+    public void Unpack(string filePath, string outputPath, Action<string, bool> writeToConsole)
     {
       byte[] bytes = File.ReadAllBytes(filePath);
 
@@ -78,7 +78,6 @@ namespace HMMUnpacker.HMM
       int dirLength = 0;
 
       var files = new List<HMMFileInfo>();
-
       while (processed < hmmFileCount)
       {
         int fnameLen = hmmFileDirectory.Slice(0, 1)[0];
@@ -128,31 +127,33 @@ namespace HMMUnpacker.HMM
       foreach (var hmmFile in files)
       {
         string fileName = hmmFile.FileName;
+
         if (hmmFile.FileNameReuseLength > 0)
         {
           fileName = $"{lastProcessedFileName.Substring(0, hmmFile.FileNameReuseLength)}{fileName}";
         }
 
-        // Create all directories detected in given path
-        string fileRootPath = Path.Combine(rootDirectory, fileName.Replace(Path.GetFileName(fileName), string.Empty));
-        Directory.CreateDirectory(fileRootPath);
-        lastProcessedFileName = fileName;
         try
         {
+          // Create all directories detected in given path
+          string fileRootPath = Path.Combine(rootDirectory, fileName.Replace(Path.GetFileName(fileName), string.Empty));
+          Directory.CreateDirectory(fileRootPath);
+          lastProcessedFileName = fileName;
+
+          writeToConsole($"Extracting {fileName}", false);
           var fileBytes = bytes.Skip(hmmFile.Offset).Take(hmmFile.Length).ToArray();
           File.WriteAllBytes(Path.Combine(rootDirectory, fileName), fileBytes);
-          writeToConsole($"...Extracting {fileName}");
         }
         catch (Exception ex)
         {
-          writeToConsole($"Error while creating the file '{fileName}': {ex.Message}");
+          writeToConsole($"Error while creating the file '{fileName}': {ex.Message}", true);
         }
       }
 
-      writeToConsole("...DONE!");
+      writeToConsole("DONE!", false);
     }
 
-    public void Repack(string directoryPath, string outputFilePath)
+    public void Repack(string directoryPath, string outputFilePath, Action<string, bool> writeToConsole)
     {
       // TODO
     }

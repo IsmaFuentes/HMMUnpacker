@@ -30,6 +30,7 @@
     {
       bntUnpack = new Button();
       MainPanel = new Panel();
+      bntRepack = new Button();
       consoleBox = new RichTextBox();
       btnOpenFile = new Button();
       txtSelectedFile = new TextBox();
@@ -49,6 +50,7 @@
       // 
       // MainPanel
       // 
+      MainPanel.Controls.Add(bntRepack);
       MainPanel.Controls.Add(consoleBox);
       MainPanel.Controls.Add(btnOpenFile);
       MainPanel.Controls.Add(txtSelectedFile);
@@ -58,6 +60,17 @@
       MainPanel.Name = "MainPanel";
       MainPanel.Size = new Size(800, 450);
       MainPanel.TabIndex = 1;
+      // 
+      // bntRepack
+      // 
+      bntRepack.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+      bntRepack.Location = new Point(632, 415);
+      bntRepack.Name = "bntRepack";
+      bntRepack.Size = new Size(75, 23);
+      bntRepack.TabIndex = 3;
+      bntRepack.Text = "Repack";
+      bntRepack.UseVisualStyleBackColor = true;
+      bntRepack.Click += bntRepack_Click;
       // 
       // consoleBox
       // 
@@ -108,5 +121,6 @@
     private TextBox txtSelectedFile;
     private Button btnOpenFile;
     private RichTextBox consoleBox;
+    private Button bntRepack;
   }
 }
