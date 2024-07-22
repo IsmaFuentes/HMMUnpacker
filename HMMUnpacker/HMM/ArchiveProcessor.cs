@@ -209,8 +209,8 @@ namespace HMMUnpacker.HMM
             reuseFileLen = prevPath.Length;
           }
 
-          string dt = fileName.Substring(reuseFileLen);
-          bytes.Add((byte)fileName.Substring(reuseFileLen).Length);
+          string actualFileName = fileName.Substring(reuseFileLen);
+          bytes.Add((byte)actualFileName.Length);
           lastFile = fileName;
         }
         else
@@ -223,7 +223,8 @@ namespace HMMUnpacker.HMM
 
         byte[] content = File.ReadAllBytes(file);
 
-        bytes.AddRange(BitConverter.GetBytes(bytes.Count));     // offset
+        int offset = bytes.Count + content.Length + BitConverter.GetBytes(content.Length).Length;
+        bytes.AddRange(BitConverter.GetBytes(offset));          // offset
         bytes.AddRange(BitConverter.GetBytes(content.Length));  // length
         bytes.AddRange(content);
       }
