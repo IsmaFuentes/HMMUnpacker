@@ -76,7 +76,7 @@ namespace HMMUnpacker
 
             try
             {
-              processor.Repack(dialog.SelectedPath, Path.Combine(dialog.SelectedPath, $"{pakName}.pak"), (message, isError) =>
+              processor.Repack(dialog.SelectedPath, Path.Combine(Directory.GetParent(dialog.SelectedPath).FullName, $"{pakName}.pak"), (message, isError) =>
               {
                 consoleBox.Invoke(() =>
                 {

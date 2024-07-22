@@ -155,7 +155,80 @@ namespace HMMUnpacker.HMM
 
     public void Repack(string directoryPath, string outputFilePath, Action<string, bool> writeToConsole)
     {
-      // TODO
+      var bytes = new List<byte>();
+
+      string[] files = Directory
+        .GetFiles(directoryPath, "*.*", SearchOption.AllDirectories);
+
+      var hmmDirectoryBytesLength = files
+        .Select(File.ReadAllBytes)
+        .Aggregate(new List<byte>(), (accumulator, current) =>
+      {
+        accumulator.AddRange(current.ToArray());
+        return accumulator;
+      })
+        .ToArray()
+        .Count();
+
+      // Header (40 bytes)
+      bytes.AddRange(Encoding.UTF8.GetBytes("HMMSYS PackFile\x0a")); // Signature   (16)
+      bytes.AddRange(Enumerable.Repeat((byte)0, 4));                 // Unknown     (4)
+      bytes.AddRange(Enumerable.Repeat((byte)0, 12));                // Null        (12)
+      bytes.AddRange(BitConverter.GetBytes(files.Count()));          // Nº of files (4)
+      bytes.AddRange(BitConverter.GetBytes(hmmDirectoryBytesLength));// Dir length  (4)
+
+      // Files
+      string lastFile = string.Empty;
+      foreach(string file in files)
+      {
+        // For each file:
+        // -----------------------------
+        // byte {1}     - Filename Length
+        // byte {1}     - Previous Filename Reuse Length
+        // char {X}     - Filename Part (length = filenameLength - previousFilenameReuseLength)
+        // uint32 {4}   - File Offset
+        // uint32 {4}   - File Length
+
+        string fileName = file.Replace(directoryPath, string.Empty);
+        writeToConsole($"Compressing {fileName}", false);
+        if (string.IsNullOrEmpty(lastFile))
+        {
+          lastFile = fileName;
+        }
+
+        byte[] hmmFileBytes = File.ReadAllBytes(file);
+
+        int reuseFileLen = 0;
+        if(fileName != lastFile)
+        {
+          string prevPath = lastFile.Replace(Path.GetFileName(lastFile), string.Empty);
+          string currPath = fileName.Replace(Path.GetFileName(fileName), string.Empty);
+
+          if(prevPath == currPath && currPath != "\\")
+          {
+            reuseFileLen = prevPath.Length;
+          }
+
+          string dt = fileName.Substring(reuseFileLen);
+          bytes.Add((byte)fileName.Substring(reuseFileLen).Length);
+          lastFile = fileName;
+        }
+        else
+        {
+          bytes.Add((byte)fileName.Length);
+        }
+
+        bytes.Add((byte)reuseFileLen);
+        bytes.AddRange(BitConverter.GetBytes(0));
+
+        byte[] content = File.ReadAllBytes(file);
+
+        bytes.AddRange(BitConverter.GetBytes(bytes.Count));     // offset
+        bytes.AddRange(BitConverter.GetBytes(content.Length));  // length
+        bytes.AddRange(content);
+      }
+
+      File.WriteAllBytes(outputFilePath, bytes.ToArray());
     }
   }
 }
