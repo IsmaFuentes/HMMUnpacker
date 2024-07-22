@@ -57,11 +57,11 @@ namespace HMMUnpacker.HMM
       byte[] bytes = File.ReadAllBytes(filePath);
 
       // Header (40 bytes of length)
-      var sig = bytes.Take(16).ToArray();          // Signature 
-      var unk = bytes.Skip(16).Take(4).ToArray();  // ???
-      var nul = bytes.Skip(20).Take(12).ToArray(); // Null
-      var num = bytes.Skip(32).Take(4).ToArray();  // Nº of files
-      var len = bytes.Skip(36).Take(4).ToArray();  // Directory length
+      var sig = bytes.Slice(0, 16);  // Signature 
+      var unk = bytes.Slice(16, 4);  // ???
+      var nul = bytes.Slice(20, 12); // Null
+      var num = bytes.Slice(32, 4);  // Nº of files
+      var len = bytes.Slice(36, 4);  // Directory length
 
       var hmmSignature = Encoding.UTF8.GetBytes("HMMSYS PackFile\x0a");
 
@@ -71,7 +71,7 @@ namespace HMMUnpacker.HMM
       }
 
       int hmmFileCount = BitConverter.ToInt32(num);
-      var hmmFileDirectory = bytes.Skip(40).Take(bytes.Length - 40).ToArray();
+      var hmmFileDirectory = bytes.Slice(40, bytes.Length - 40);
 
       // File processing
       int processed = 0;
