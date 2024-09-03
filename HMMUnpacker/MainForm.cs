@@ -52,7 +52,7 @@ namespace HMMUnpacker
               }
               catch(Exception ex)
               {
-                Invoke(() => MessageBox.Show(ex.Message, "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error));
+                Invoke(() => MessageBox.Show(this, ex.Message, "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error));
               }
             });
           }
@@ -89,7 +89,7 @@ namespace HMMUnpacker
             }
             catch(Exception ex)
             {
-              Invoke(() => MessageBox.Show(ex.Message, "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error));
+              Invoke(() => MessageBox.Show(this, ex.Message, "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error));
             }
           });
         }

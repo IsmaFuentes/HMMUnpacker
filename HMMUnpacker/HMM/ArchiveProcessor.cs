@@ -7,6 +7,7 @@ namespace HMMUnpacker.HMM
 {
   /// <summary>
   /// Source code used as a baseline (Python): https://github.com/ross-spencer/hmmunpack/blob/main/hmmunpack.py
+  /// http://fileformats.archiveteam.org/wiki/HMM_Packfile
   /// </summary>
   public class ArchiveProcessor : IArchiveProcessor
   {
@@ -37,7 +38,7 @@ namespace HMMUnpacker.HMM
         | Format header (40 bytes)                    |
         +---------------------------------------------+
         | File directory (n-bytes * no_files)         |
-        | (1, 1, max(255), max(255), 4, 4) * no_files |
+        | (1, 1, max(255), 4, 4) * no_files |
         +---------------------------------------------+
         | Padding (no_files * 4-bytes)                |
         +---------------------------------------------+
@@ -107,15 +108,15 @@ namespace HMMUnpacker.HMM
         processed++;
       }
 
-      var directoryLength = BitConverter.ToInt32(len);
-      if (dirLength != BitConverter.ToInt32(len))
+      int directoryLength = BitConverter.ToInt32(len);
+      if (dirLength != directoryLength)
       {
         throw new Exception("Directory lengths do not match");
       }
 
-      var additionalDataLenght = hmmFileCount * 4;
-      var padding = hmmFileDirectory.Slice(0, additionalDataLenght); // probably not useful
-      var firstFileOffset = (dirLength + additionalDataLenght + 40);
+      var additionalDataLength = hmmFileCount * 4;
+      var padding = hmmFileDirectory.Slice(0, additionalDataLength); // probably not useful
+      var firstFileOffset = (dirLength + additionalDataLength + 40);
 
       if (files.First().Offset != firstFileOffset)
       {
@@ -156,28 +157,20 @@ namespace HMMUnpacker.HMM
 
     public void Repack(string directoryPath, string outputFilePath, Action<string, bool> writeToConsole)
     {
-      var bytes = new List<byte>();
-      
       string[] files = Directory
         .GetFiles(directoryPath, "*.*", SearchOption.AllDirectories);
 
-      writeToConsole("Calculating directory length...", false);
+      var hmmFileDirectoryPairs = new List<KeyValuePair<int, List<byte>>>();
+      var hmmFileDirectoryBytes = new List<byte>();
+      var hmmFileData = new List<byte>();
 
-      int hmmDirectoryLength = (int)GetDirectorySize(new DirectoryInfo(directoryPath));
-      var hmmDirectoryBytes = new byte[hmmDirectoryLength];
-
-      // Header (40 bytes)
-      bytes.AddRange(Encoding.UTF8.GetBytes("HMMSYS PackFile\x0a"));  // Signature   (16)
-      bytes.AddRange(Enumerable.Repeat((byte)0, 4));                  // Unknown     (4)
-      bytes.AddRange(Enumerable.Repeat((byte)0, 12));                 // Null        (12)
-      bytes.AddRange(BitConverter.GetBytes(files.Count()));           // Nº of files (4)
-      bytes.AddRange(BitConverter.GetBytes(hmmDirectoryLength));      // Dir length  (4)
-
-      // Files
       string lastFile = string.Empty;
-      int offset = 0;
-      foreach(string file in files)
+
+      foreach(var path in files)
       {
+        var fileBytes = File.ReadAllBytes(path);
+        hmmFileData.AddRange(fileBytes);
+
         // For each file:
         // -----------------------------
         // byte {1}     - Filename Length
@@ -186,22 +179,18 @@ namespace HMMUnpacker.HMM
         // uint32 {4}   - File Offset
         // uint32 {4}   - File Length
 
-        string fileName = file.Replace(directoryPath, string.Empty);
+        string fileName = Path.GetRelativePath(directoryPath, path);
         writeToConsole($"Compressing {fileName}", false);
-
-        if (string.IsNullOrEmpty(lastFile))
+        if (lastFile == string.Empty)
         {
           lastFile = fileName;
         }
 
-        byte[] hmmFileBytes = File.ReadAllBytes(file);
-
         int fnameResueLen = 0;
-
         string prevPath = lastFile.Replace(Path.GetFileName(lastFile), string.Empty);
         string currPath = fileName.Replace(Path.GetFileName(fileName), string.Empty);
 
-        if (prevPath == currPath && currPath != "\\")
+        if (prevPath == currPath)
         {
           fnameResueLen = prevPath.Length;
         }
@@ -210,43 +199,45 @@ namespace HMMUnpacker.HMM
 
         string fnamePart = fileName.Substring(fnameResueLen);
 
-        bytes.Add((byte)fileName.Length); //fnamePart            // fileName (1)
-        bytes.Add((byte)fnameResueLen);                          // Reuse file length (1)
-        bytes.AddRange(Encoding.UTF8.GetBytes(fnamePart));       // Filename part (length = fileName.Length - reuseFileLen)
+        var hmmFileBytes = new List<byte>();
+        hmmFileBytes.Add((byte)fileName.Length);                        // fileName (1)
+        hmmFileBytes.Add((byte)fnameResueLen);                          // Reuse file length (1)
+        hmmFileBytes.AddRange(Encoding.UTF8.GetBytes(fnamePart));       // Filename part (length = fileName.Length - reuseFileLen)
 
-        byte[] content = File.ReadAllBytes(file);
-
-        content.CopyTo(hmmDirectoryBytes, offset);
-
-        bytes.AddRange(BitConverter.GetBytes(offset));           // offset (4) +2??
-        bytes.AddRange(BitConverter.GetBytes(content.Length));   // length (4) +4??
-        offset += content.Length;
+        hmmFileDirectoryPairs.Add(new KeyValuePair<int, List<byte>>(fileBytes.Length, hmmFileBytes));
       }
 
-      // TODO: FIX Error Directory lengths do not match
+      var padding = new byte[files.Length * 4];
+      // Accumulated directoryFile length in bytes + pending count needed for offsets and lengths
+      int offset = 40 + hmmFileDirectoryPairs.Sum(e => e.Value.Count) + (files.Count() * 8) + padding.Length;
 
-      // padding?
-      bytes.AddRange(hmmDirectoryBytes);
+      foreach(var pair in hmmFileDirectoryPairs)
+      {
+        int len = pair.Key;
+        var dta = pair.Value;
 
-      File.WriteAllBytes(outputFilePath, bytes.ToArray());
+        dta.AddRange(BitConverter.GetBytes(offset));   // file offset (4) +2??
+        dta.AddRange(BitConverter.GetBytes(len));      // file length (4) +4??
+        hmmFileDirectoryBytes.AddRange(dta);
+        offset += len;
+      }
+
+      // Header (40 bytes)
+      var hmmHeader = new List<byte>();
+      hmmHeader.AddRange(Encoding.UTF8.GetBytes("HMMSYS PackFile\x0a"));      // Signature   (16)
+      hmmHeader.AddRange(Enumerable.Repeat((byte)0, 4));                      // Unknown     (4)
+      hmmHeader.AddRange(Enumerable.Repeat((byte)0, 12));                     // Null        (12)
+      hmmHeader.AddRange(BitConverter.GetBytes(files.Count()));               // Nº of files (4)
+      hmmHeader.AddRange(BitConverter.GetBytes(hmmFileDirectoryBytes.Count)); // Directory length (4)
+
+      var hmmBytes = new List<byte>();
+      hmmBytes.AddRange(hmmHeader);
+      hmmBytes.AddRange(hmmFileDirectoryBytes);
+      hmmBytes.AddRange(padding);
+      hmmBytes.AddRange(hmmFileData);
+
+      File.WriteAllBytes(outputFilePath, hmmBytes.ToArray());
       writeToConsole("DONE!", false);
-    }
-
-    private long GetDirectorySize(DirectoryInfo info)
-    {
-      long size = 0;
-
-      foreach (FileInfo fi in info.GetFiles())
-      {
-        size += fi.Length;
-      }
-
-      foreach (DirectoryInfo di in info.GetDirectories())
-      {
-        size += GetDirectorySize(di);
-      }
-
-      return size;
     }
   }
 }
