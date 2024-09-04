@@ -171,16 +171,9 @@ namespace HMMUnpacker.HMM
         var fileBytes = File.ReadAllBytes(path);
         hmmFileData.AddRange(fileBytes);
 
-        // For each file:
-        // -----------------------------
-        // byte {1}     - Filename Length
-        // byte {1}     - Previous Filename Reuse Length
-        // char {X}     - Filename Part (length = filenameLength - previousFilenameReuseLength)
-        // uint32 {4}   - File Offset
-        // uint32 {4}   - File Length
-
         string fileName = Path.GetRelativePath(directoryPath, path);
         writeToConsole($"Compressing {fileName}", false);
+
         if (lastFile == string.Empty)
         {
           lastFile = fileName;
@@ -202,39 +195,39 @@ namespace HMMUnpacker.HMM
         var hmmFileBytes = new List<byte>();
         hmmFileBytes.Add((byte)fileName.Length);                        // fileName (1)
         hmmFileBytes.Add((byte)fnameResueLen);                          // Reuse file length (1)
-        hmmFileBytes.AddRange(Encoding.UTF8.GetBytes(fnamePart));       // Filename part (length = fileName.Length - reuseFileLen)
+        hmmFileBytes.AddRange(Encoding.UTF8.GetBytes(fnamePart));       // Filename part (length = fileName.Length - reuseFileLen, max 255)
 
+        // Because we still don't know the full length of the file directory which is needed to calculate the offset (each file has a different filename length), 
+        // we will be using a KeyValuePair to store the initial parameters.  
         hmmFileDirectoryPairs.Add(new KeyValuePair<int, List<byte>>(fileBytes.Length, hmmFileBytes));
       }
 
       var padding = new byte[files.Length * 4];
-      // Accumulated directoryFile length in bytes + pending count needed for offsets and lengths
+      // Accumulated directoryFile length in bytes + pending byte count needed for offsets and lengths + padding
       int offset = 40 + hmmFileDirectoryPairs.Sum(e => e.Value.Count) + (files.Count() * 8) + padding.Length;
 
       foreach(var pair in hmmFileDirectoryPairs)
-      {
-        int len = pair.Key;
-        var dta = pair.Value;
-
-        dta.AddRange(BitConverter.GetBytes(offset));   // file offset (4) +2??
-        dta.AddRange(BitConverter.GetBytes(len));      // file length (4) +4??
-        hmmFileDirectoryBytes.AddRange(dta);
+      { // Now that we have access to the real offset, we can finish encoding the file directory using the stored key value pairs
+        int len = pair.Key; 
+        pair.Value.AddRange(BitConverter.GetBytes(offset));   // file offset (4)
+        pair.Value.AddRange(BitConverter.GetBytes(len));      // file length (4)
+        hmmFileDirectoryBytes.AddRange(pair.Value);
         offset += len;
       }
 
       // Header (40 bytes)
       var hmmHeader = new List<byte>();
-      hmmHeader.AddRange(Encoding.UTF8.GetBytes("HMMSYS PackFile\x0a"));      // Signature   (16)
-      hmmHeader.AddRange(Enumerable.Repeat((byte)0, 4));                      // Unknown     (4)
-      hmmHeader.AddRange(Enumerable.Repeat((byte)0, 12));                     // Null        (12)
-      hmmHeader.AddRange(BitConverter.GetBytes(files.Count()));               // Nº of files (4)
+      hmmHeader.AddRange(Encoding.UTF8.GetBytes("HMMSYS PackFile\x0a"));      // Signature        (16)
+      hmmHeader.AddRange(Enumerable.Repeat((byte)0, 4));                      // Unknown          (4)
+      hmmHeader.AddRange(Enumerable.Repeat((byte)0, 12));                     // Null             (12)
+      hmmHeader.AddRange(BitConverter.GetBytes(files.Count()));               // Nº of files      (4)
       hmmHeader.AddRange(BitConverter.GetBytes(hmmFileDirectoryBytes.Count)); // Directory length (4)
 
       var hmmBytes = new List<byte>();
-      hmmBytes.AddRange(hmmHeader);
-      hmmBytes.AddRange(hmmFileDirectoryBytes);
-      hmmBytes.AddRange(padding);
-      hmmBytes.AddRange(hmmFileData);
+      hmmBytes.AddRange(hmmHeader);                                           // Header 
+      hmmBytes.AddRange(hmmFileDirectoryBytes);                               // DirectoryInfo
+      hmmBytes.AddRange(padding);                                             // Padding
+      hmmBytes.AddRange(hmmFileData);                                         // FileData
 
       File.WriteAllBytes(outputFilePath, hmmBytes.ToArray());
       writeToConsole("DONE!", false);
